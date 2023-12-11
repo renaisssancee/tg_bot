@@ -54,9 +54,12 @@ def start(m, res=False):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Расписание")
     item2 = types.KeyboardButton("Услуги")
+    item3 = types.KeyboardButton("Прайс")
     markup.add(item1)
     markup.add(item2)
-    bot.send_message(m.chat.id, 'Нажми: \nРасписание для получения окошек, Услуги для информации', reply_markup=markup)
+    markup.add(item3)
+    bot.send_message(m.chat.id, f'Здравствуйте, {m.from_user.first_name}!\nДобро пожаловать в студию smp nails\U0001FA77 \nС помощью бота вы сможете: \n \U0001F337 Самостоятельно записаться на процедуру \n \U0001F337 Ознакомиться с прайсом \n \U0001F337 Подтвердить или отменить запись')
+    bot.send_message(m.chat.id, "Выберите, пожалуйста, что вас интересует\U0001F447", reply_markup=markup)
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
@@ -72,6 +75,8 @@ def handle_text(message):
         rows = cursor.fetchall()
         rows_str = [', '.join(map(str, row)) for row in rows]
         message_str = '\n'.join(rows_str)
+    elif  message.text.strip() == 'Прайс':
+        message_str = "price"
     else:
         message_str = 'нажмите кнопку'
     conn.close()

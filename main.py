@@ -55,14 +55,15 @@ def add_info(service, info, time, price):
 add_info('\U0001F337 Маникюр с однотонным покрытием гель-лак', 'Входит снятие старого покрытия, опил формы, комби маникюр, выравнивание, покрытие под кутикулу', 'Продолжительность процедуры - 2 часа', 'Стоимость - 2500 рублей')
 add_info('\U0001F337 Наращивание', 'Входит снятие старого покрытия, комби маникюр, создание архитектуры гелем, покрытие под кутикулу', 'Продолжительность процедуры - 2,5 часа', 'Стоимость - 3500 рублей')
 add_info('\U0001F337 Маникюр без покрытия', 'Входит снятие старого покрытия, опил формы, комби маникюр', 'Продолжительность процедуры - 1 час', 'Стоимость - 1000 рублей')
-add_info('\U0001F337 Снятие без маникюра', 'Входитнятие старого покрытия, опил формы', 'Продолжительность процедуры - 15 минут', 'Стоимость - 500 рублей')
+add_info('\U0001F337 Снятие без маникюра', 'Входит снятие старого покрытия, опил формы', 'Продолжительность процедуры - 15 минут', 'Стоимость - 500 рублей')
 add_info('\U0001F337 SPA-уход', 'Входит очищение кожи с использованием скраба, интенсивное питание кожи маской-филлером, увлажнение кремом с пептидным комплексом', '30 минут', 'Стоимость - 700 рублей')
 
 def send_schedule_keyboard(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Выбрать мастера")
     item2 = types.KeyboardButton("Выбрать время")
-    markup.add(item1, item2)
+    item3 = types.KeyboardButton("Назад")
+    markup.add(item1, item2, item3)
     bot.send_message(chat_id, "Выберите опцию:", reply_markup=markup)
 
 @bot.message_handler(commands=["start"])
@@ -106,6 +107,9 @@ def handle_text(message):
             markup.add(button)
         bot.send_message(message.chat.id, "Выберите время:", reply_markup=markup)
 
+    elif message.text.strip() == 'Назад':
+        start(message)
+    
     else:
         bot.send_message(message.chat.id, 'нажмите кнопку')
 
@@ -122,6 +126,7 @@ def callback_choose_time(call):
     bot.send_message(call.message.chat.id, f"Вы выбрали время: {time_slot}")
 
 bot.polling(none_stop=True, interval=0)
+
 
 
 

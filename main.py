@@ -13,6 +13,21 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS info
 connection.commit()
 connection.close()
 
+# Добавление информации о времени работы мастеров
+masters_schedule = {
+    'Анна': ['11:00', '12:00'],
+    'Алина': ['13:00', '14:00'],
+    'Полина': ['15:00', '16:00'],
+}
+
+# Функция для получения свободного времени мастера
+def get_available_times(master):
+    connection = sqlite3.connect('database.db')
+    cursor = connection.cursor()
+    cursor.execute('SELECT Time FROM timetable WHERE Master = ? AND Date = ?', (master, '01.01.2024'))
+    scheduled_times = [row[0] for row in cursor.fetchall()]
+    connection.close()
+    return [time for time in masters_schedule[master] if time not in scheduled_times]
 
 def add_timetable(date, time, master):
     connection = sqlite3.connect('database.db')
@@ -98,20 +113,23 @@ def handle_text(message):
         send_inline_keyboard(message.chat.id)
 
     elif message.text.strip() == 'Выбрать мастера':
-        masters = ['Анна', 'Алина', 'Полина']
         markup = types.InlineKeyboardMarkup()
-        for master in masters:
+        for master in masters_schedule.keys():
             button = types.InlineKeyboardButton(text=master, callback_data=f"choose_master_{master}")
             markup.add(button)
         bot.send_message(message.chat.id, "Выберите мастера:", reply_markup=markup)
 
+
     elif message.text.strip() == 'Выбрать время':
-        time_slots = ['1 января 11.00', '1 января 12.00', '2 января 17.00']
         markup = types.InlineKeyboardMarkup()
-        for time_slot in time_slots:
-            button = types.InlineKeyboardButton(text=time_slot, callback_data=f"choose_time_{time_slot}")
-            markup.add(button)
+        for master, working_hours in masters_schedule.items():
+            for time_slot in working_hours:
+                button_text = f"{master}: {time_slot}"
+                callback_data = f"choose_time_{master}_{time_slot}"
+                button = types.InlineKeyboardButton(text=button_text, callback_data=callback_data)
+                markup.add(button)
         bot.send_message(message.chat.id, "Выберите время:", reply_markup=markup)
+
 
     elif message.text.strip() == 'Назад':
         start(message)
@@ -136,15 +154,23 @@ def callback_show_service(call):
     else:
         bot.send_message(call.message.chat.id, "Информация не найдена.")
 
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
 def callback_choose_master(call):
     master_name = call.data.split('_')[-1]
-    bot.send_message(call.message.chat.id, f"Вы выбрали мастера: {master_name}")
+    available_times = get_available_times(master_name)
+
+    if available_times:
+        markup = types.InlineKeyboardMarkup()
+        for time in available_times:
+            button = types.InlineKeyboardButton(text=time, callback_data=f"choose_time_{master_name}_{time}")
+            markup.add(button)
+        bot.send_message(call.message.chat.id, f"Выберите свободное время для мастера {master_name}:", reply_markup=markup)
+    else:
+        bot.send_message(call.message.chat.id, f"На выбранную дату все слоты мастра {master_name} заняты. Выберите другого мастера или дату.")
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_time_'))
 def callback_choose_time(call):
-    time_slot = call.data.split('_')[-1]
-    bot.send_message(call.message.chat.id, f"Вы выбрали время: {time_slot}")
+    master_name, time_slot = call.data.split('_')[2], call.data.split('_')[-1]
+    bot.send_message(call.message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
 
 bot.polling(none_stop=True, interval=0)

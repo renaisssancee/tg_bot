@@ -13,6 +13,7 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS info
 connection.commit()
 connection.close()
 
+
 def add_timetable(date, time, master):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
@@ -52,11 +53,11 @@ def add_info(service, info, time, price):
     connection.commit()
     connection.close()
 
-add_info('\U0001F337 Маникюр с однотонным покрытием гель-лак', 'Входит снятие старого покрытия, опил формы, комби маникюр, выравнивание, покрытие под кутикулу', 'Продолжительность процедуры - 2 часа', 'Стоимость - 2500 рублей')
-add_info('\U0001F337 Наращивание', 'Входит снятие старого покрытия, комби маникюр, создание архитектуры гелем, покрытие под кутикулу', 'Продолжительность процедуры - 2,5 часа', 'Стоимость - 3500 рублей')
-add_info('\U0001F337 Маникюр без покрытия', 'Входит снятие старого покрытия, опил формы, комби маникюр', 'Продолжительность процедуры - 1 час', 'Стоимость - 1000 рублей')
-add_info('\U0001F337 Снятие без маникюра', 'Входит снятие старого покрытия, опил формы', 'Продолжительность процедуры - 15 минут', 'Стоимость - 500 рублей')
-add_info('\U0001F337 SPA-уход', 'Входит очищение кожи с использованием скраба, интенсивное питание кожи маской-филлером, увлажнение кремом с пептидным комплексом', '30 минут', 'Стоимость - 700 рублей')
+add_info('Маникюр с покрытием', 'Входит снятие старого покрытия, опил формы, комби маникюр, выравнивание, покрытие под кутикулу', 'Продолжительность процедуры - 2 часа', 'Стоимость - 2500 рублей')
+add_info('Наращивание', 'Входит снятие старого покрытия, комби маникюр, создание архитектуры гелем, покрытие гель-лаком под кутикулу', 'Продолжительность процедуры - 2,5 часа', 'Стоимость - 3500 рублей')
+add_info('Маникюр без покрытия', 'Входит снятие старого покрытия, опил формы, комби маникюр', 'Продолжительность процедуры - 1 час', 'Стоимость - 1000 рублей')
+add_info('Снятие покрытия', 'Входит снятие старого покрытия, опил формы', 'Продолжительность процедуры - 15 минут', 'Стоимость - 500 рублей')
+add_info('SPA-уход', 'Входит очищение кожи с использованием скраба, интенсивное питание кожи маской-филлером, увлажнение кремом с пептидным комплексом', '30 минут', 'Стоимость - 700 рублей')
 
 def send_schedule_keyboard(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -65,6 +66,15 @@ def send_schedule_keyboard(chat_id):
     item3 = types.KeyboardButton("Назад")
     markup.add(item1, item2, item3)
     bot.send_message(chat_id, "Выберите опцию:", reply_markup=markup)
+
+def send_inline_keyboard(chat_id):
+    markup = types.InlineKeyboardMarkup()
+    services = ['Маникюр с покрытием', 'Наращивание', 'Маникюр без покрытия', 'Снятие покрытия', 'SPA-уход']
+    for service in services:
+        button = types.InlineKeyboardButton(text=service, callback_data=f"choose_option_{service}")
+        markup.add(button)
+    bot.send_message(chat_id, "Выберите услугу:", reply_markup=markup)
+
 
 @bot.message_handler(commands=["start"])
 def start(m, res=False):
@@ -85,11 +95,7 @@ def handle_text(message):
         send_schedule_keyboard(message.chat.id)
 
     elif message.text.strip() == 'Услуги':
-        cursor.execute('SELECT * FROM info')
-        rows = cursor.fetchall()
-        rows_str = ['\n'.join(map(str, row)) for row in rows]
-        message_str = '\n'.join(rows_str)
-        bot.send_message(message.chat.id, message_str)
+        send_inline_keyboard(message.chat.id)
 
     elif message.text.strip() == 'Выбрать мастера':
         masters = ['Анна', 'Алина', 'Полина']
@@ -115,6 +121,22 @@ def handle_text(message):
 
     conn.close()
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith('choose_option_'))
+def callback_show_service(call):
+    service_name = call.data.split('_')[-1].replace('_', ' ')  # Replace underscores with spaces
+    connection = sqlite3.connect('database.db')
+    cursor = connection.cursor()
+    cursor.execute('SELECT * FROM info WHERE Service = ?', (service_name,))
+    service_info = cursor.fetchone()
+    connection.close()
+
+    if service_info:
+        info_message = f"{service_info[0]}\n{service_info[1]}\n{service_info[2]}\n{service_info[3]}"
+        bot.send_message(call.message.chat.id, info_message)
+    else:
+        bot.send_message(call.message.chat.id, "Информация не найдена.")
+
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
 def callback_choose_master(call):
     master_name = call.data.split('_')[-1]
@@ -126,7 +148,3 @@ def callback_choose_time(call):
     bot.send_message(call.message.chat.id, f"Вы выбрали время: {time_slot}")
 
 bot.polling(none_stop=True, interval=0)
-
-
-
-

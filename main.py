@@ -1,19 +1,15 @@
 import telebot
 from telebot import types
-bot = telebot.TeleBot('6574248387:AAGILlI3c29I8CqEQYT_xX-cVOTQaj15UM0')
-
-import random
-import pandas as pd
 import sqlite3
+
+bot = telebot.TeleBot('6574248387:AAGILlI3c29I8CqEQYT_xX-cVOTQaj15UM0')
 
 connection = sqlite3.connect('database.db')
 cursor = connection.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
               (Date, Time, Master)''')
-#cursor.execute('DELETE FROM timetable;')
 cursor.execute('''CREATE TABLE IF NOT EXISTS info
               (Service, Info, Time, Price)''')
-#cursor.execute('DELETE FROM info;')
 connection.commit()
 connection.close()
 
@@ -33,8 +29,7 @@ def add_timetable(date, time, master):
 
 add_timetable('01.01.2024', '10:00', 'Anna')
 
-
-def remove_old_timetable_entries(): # это когда нужно очистить базу данных info потому что добавили обновленные данные и старые уже неактуальны
+def remove_old_timetable_entries(): # это когда нужно очистить базу данных info 
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
 
@@ -72,6 +67,13 @@ add_info('\U0001F337 Маникюр без покрытия', 'Входит сн
 add_info('\U0001F337 Снятие без маникюра', 'Входитнятие старого покрытия, опил формы', 'Продолжительность процедуры - 15 минут', 'Стоимость - 500 рублей')
 add_info('\U0001F337 SPA-уход', 'Входит очищение кожи с использованием скраба, интенсивное питание кожи маской-филлером, увлажнение кремом с пептидным комплексом', '30 минут', 'Стоимость - 700 рублей')
 
+def send_schedule_keyboard(chat_id):
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    item1 = types.KeyboardButton("Выбрать мастера")
+    item2 = types.KeyboardButton("Выбрать время")
+    markup.add(item1, item2)
+    bot.send_message(chat_id, "Выберите опцию:", reply_markup=markup)
+
 @bot.message_handler(commands=["start"])
 def start(m, res=False):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -86,19 +88,33 @@ def start(m, res=False):
 def handle_text(message):
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
+
     if message.text.strip() == 'Расписание':
-        cursor.execute('SELECT * FROM timetable')
-        rows = cursor.fetchall()
-        rows_str = [' '.join(map(str, row)) for row in rows]
-        message_str = '\n'.join(rows_str)
+        send_schedule_keyboard(message.chat.id)
+        # Дополнительный код, если необходимо что-то еще после выбора "Расписание"
+
     elif message.text.strip() == 'Услуги':
         cursor.execute('SELECT * FROM info')
         rows = cursor.fetchall()
         rows_str = ['\n'.join(map(str, row)) for row in rows]
         message_str = '\n'.join(rows_str)
+        bot.send_message(message.chat.id, message_str)
+
+    elif message.text.strip() == 'Выбрать мастера':
+        masters = ['Анна', 'Алина', 'Полина']
+        message_str = 'Выберите мастера:\n' + '\n'.join(masters)
+        bot.send_message(message.chat.id, message_str)
+
+    elif message.text.strip() == 'Выбрать время':
+        time_slots = ['1 января 11.00', '1 января 12.00', '2 января 17.00']
+        message_str = 'Выберите время:\n' + '\n'.join(time_slots)
+        bot.send_message(message.chat.id, message_str)
+
     else:
-        message_str = 'нажмите кнопку'
+        bot.send_message(message.chat.id, 'нажмите кнопку')
+
     conn.close()
-    bot.send_message(message.chat.id, message_str)
+
 
 bot.polling(none_stop=True, interval=0)
+

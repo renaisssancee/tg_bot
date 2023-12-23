@@ -90,16 +90,41 @@ def send_inline_keyboard(chat_id):
         markup.add(button)
     bot.send_message(chat_id, "Выберите услугу:", reply_markup=markup)
 
+@bot.message_handler(commands=['start'])
+def start(message):
+    connect = sqlite3.connect('database.db')
+    cursor = connect.cursor()
 
-@bot.message_handler(commands=["start"])
-def start(m, res=False):
+    cursor.execute("""CREATE TABLE IF NOT EXISTS login_id(id INTEGER)""")
+    connect.commit()
+
+    people_id = message.chat.id
+    cursor.execute(f"SELECT id FROM login_id WHERE id = {people_id}")
+    data = cursor.fetchone()
+
+    if data is None:
+        user_id = [message.chat.id]
+        cursor.execute("INSERT INTO login_id VALUES(?);", user_id)
+
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Расписание")
     item2 = types.KeyboardButton("Услуги")
     markup.add(item1)
     markup.add(item2)
-    bot.send_message(m.chat.id, f'Здравствуйте, {m.from_user.first_name}!\nДобро пожаловать в студию smp nails\U0001FA77 \nС помощью этого бота вы сможете: \n \U0001F337 Ознакомиться с услугами салона  \n \U0001F337 Самостоятельно записаться на процедуру \n \U0001F337 Ознакомиться с прайсом \n \U0001F337 Подтвердить или отменить запись')
-    bot.send_message(m.chat.id, "Выберите, пожалуйста, что вас интересует\U0001F447", reply_markup=markup)
+    bot.send_message(message.chat.id, f'Здравствуйте, {message.from_user.first_name}!\nДобро пожаловать в студию smp nails\U0001FA77 \nС помощью этого бота вы сможете: \n \U0001F337 Ознакомиться с услугами салона  \n \U0001F337 Самостоятельно записаться на процедуру \n \U0001F337 Ознакомиться с прайсом \n \U0001F337 Подтвердить или отменить запись')
+    bot.send_message(message.chat.id, "Выберите, пожалуйста, что вас интересует\U0001F447", reply_markup=markup)
+
+    connect.close()
+
+# @bot.message_handler(commands=["start"])
+# def start(m, res=False):
+#     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+#     item1 = types.KeyboardButton("Расписание")
+#     item2 = types.KeyboardButton("Услуги")
+#     markup.add(item1)
+#     markup.add(item2)
+#     bot.send_message(m.chat.id, f'Здравствуйте, {m.from_user.first_name}!\nДобро пожаловать в студию smp nails\U0001FA77 \nС помощью этого бота вы сможете: \n \U0001F337 Ознакомиться с услугами салона  \n \U0001F337 Самостоятельно записаться на процедуру \n \U0001F337 Ознакомиться с прайсом \n \U0001F337 Подтвердить или отменить запись')
+#     bot.send_message(m.chat.id, "Выберите, пожалуйста, что вас интересует\U0001F447", reply_markup=markup)
 
 @bot.message_handler(content_types=["text"])
 def handle_text(message):

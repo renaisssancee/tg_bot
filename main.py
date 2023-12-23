@@ -95,16 +95,16 @@ def start(message):
     connect = sqlite3.connect('database.db')
     cursor = connect.cursor()
 
-    cursor.execute("""CREATE TABLE IF NOT EXISTS login_id(id INTEGER)""")
+    cursor.execute("""CREATE TABLE IF NOT EXISTS login_id(id INTEGER, first_name TEXT)""")
     connect.commit()
 
     people_id = message.chat.id
-    cursor.execute(f"SELECT id FROM login_id WHERE id = {people_id}")
+    cursor.execute(f"SELECT id FROM login_id WHERE id = ?", (people_id,))
     data = cursor.fetchone()
 
     if data is None:
-        user_id = [message.chat.id]
-        cursor.execute("INSERT INTO login_id VALUES(?);", user_id)
+        user_id = [message.chat.id, message.from_user.first_name]
+        cursor.execute("INSERT INTO login_id VALUES(?, ?);", user_id)
 
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Расписание")

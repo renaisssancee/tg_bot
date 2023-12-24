@@ -102,8 +102,10 @@ def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Запись в салон")
     item2 = types.KeyboardButton("Услуги")
+    item3 = types.KeyboardButton("Мои записи")
     markup.add(item1)
     markup.add(item2)
+    markup.add(item3)
     bot.send_message(message.chat.id, f'Здравствуйте, {message.from_user.first_name}!\nДобро пожаловать в студию smp nails\U0001FA77 \nС помощью этого бота вы сможете: \n \U0001F337 Ознакомиться с услугами салона  \n \U0001F337 Самостоятельно записаться на процедуру \n \U0001F337 Ознакомиться с прайсом \n \U0001F337 Подтвердить или отменить запись')
     bot.send_message(message.chat.id, "Выберите, пожалуйста, что вас интересует\U0001F447", reply_markup=markup)
 
@@ -119,6 +121,23 @@ def handle_text(message):
 
     elif message.text.strip() == 'Услуги':
         send_inline_keyboard(message.chat.id)
+
+    elif message.text.strip() == 'Мои записи':
+        connection = sqlite3.connect('database.db')
+        cursor = connection.cursor()
+        user_id = message.chat.id
+        cursor.execute(f'SELECT master_name, time_slot FROM appointments WHERE id = {user_id}')
+
+        appointments = cursor.fetchall()
+
+        if len(appointments) == 0:
+            bot.send_message(message.chat.id, "У вас нет предстоящих записей")
+        else:
+            bot.send_message(message.chat.id, "Ваши предстоящие записи:")
+            for i, appointment in enumerate(appointments):
+                master_name, time_slot = appointment
+                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Мастер: {master_name}")
+        connection.close()  
 
     elif message.text.strip() == 'Выбрать мастера':
         markup = types.InlineKeyboardMarkup()
@@ -221,8 +240,6 @@ def process_generate_appointment(message, master_name, time_slot, customer_name)
     connection.commit()
 
     user_id = message.chat.id
-    cursor.execute(f"SELECT id FROM appointments WHERE id = {user_id}")
-    data = cursor.fetchone()
     values = [user_id, master_name, time_slot, customer_name, customer_phone]
     cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
 

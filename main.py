@@ -1,13 +1,15 @@
 import telebot
 from telebot import types
+from telebot.types import Message
 import sqlite3
 
 bot = telebot.TeleBot('6574248387:AAGILlI3c29I8CqEQYT_xX-cVOTQaj15UM0')
+user_sessions = {}
 
 connection = sqlite3.connect('database.db')
 cursor = connection.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
-              (Date, Time, Master)''')
+              (Time TEXT, Master TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS info
               (Service, Info, Time, Price)''')
 connection.commit()
@@ -25,26 +27,34 @@ masters_schedule = {
 def get_available_times(master):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
-    cursor.execute('SELECT Time FROM timetable WHERE Master = ? AND Date = ?', (master, '01.01.2024'))
+    cursor.execute('SELECT Time FROM timetable WHERE Master = ?', (master,))
     scheduled_times = [row[0] for row in cursor.fetchall()]
     connection.close()
-    return [time for time in masters_schedule[master] if time not in scheduled_times]
+    return [time for time in scheduled_times]
 
-def add_timetable(date, time, master):
+def add_timetable(time, master):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
     cursor.execute("""
-        INSERT INTO timetable (Date, Time, Master) 
-        SELECT ?, ?, ?
+        INSERT INTO timetable (Time, Master) 
+        SELECT ?, ?
         WHERE NOT EXISTS (
             SELECT 1 FROM timetable 
-            WHERE Date = ? AND Time = ? AND Master = ?
+            WHERE Time = ? AND Master = ?
         )
-    """, (date, time, master, date, time, master))
+    """, (time, master, time, master))
+
     connection.commit()
     connection.close()
 
-add_timetable('01.01.2024', '10:00', 'Anna')
+add_timetable('11:00', 'Анна')
+add_timetable('12:00', 'Анна')
+add_timetable('13:00', 'Алина')
+add_timetable('14:00', 'Алина')
+add_timetable('15:00', 'Полина')
+add_timetable('16:00', 'Полина')
+add_timetable('15:00', 'Жанна')
+add_timetable('16:00', 'Жанна')
 
 def remove_old_timetable_entries():
     connection = sqlite3.connect('database.db')
@@ -96,19 +106,8 @@ def start(message):
     connect = sqlite3.connect('database.db')
     cursor = connect.cursor()
 
-    cursor.execute("""CREATE TABLE IF NOT EXISTS login_id(id INTEGER, first_name TEXT)""")
-    connect.commit()
-
-    people_id = message.chat.id
-    cursor.execute(f"SELECT id FROM login_id WHERE id = ?", (people_id,))
-    data = cursor.fetchone()
-
-    if data is None:
-        user_id = [message.chat.id, message.from_user.first_name]
-        cursor.execute("INSERT INTO login_id VALUES(?, ?);", user_id)
-
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    item1 = types.KeyboardButton("Расписание")
+    item1 = types.KeyboardButton("Запись в салон")
     item2 = types.KeyboardButton("Услуги")
     markup.add(item1)
     markup.add(item2)
@@ -117,22 +116,12 @@ def start(message):
 
     connect.close()
 
-# @bot.message_handler(commands=["start"])
-# def start(m, res=False):
-#     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-#     item1 = types.KeyboardButton("Расписание")
-#     item2 = types.KeyboardButton("Услуги")
-#     markup.add(item1)
-#     markup.add(item2)
-#     bot.send_message(m.chat.id, f'Здравствуйте, {m.from_user.first_name}!\nДобро пожаловать в студию smp nails\U0001FA77 \nС помощью этого бота вы сможете: \n \U0001F337 Ознакомиться с услугами салона  \n \U0001F337 Самостоятельно записаться на процедуру \n \U0001F337 Ознакомиться с прайсом \n \U0001F337 Подтвердить или отменить запись')
-#     bot.send_message(m.chat.id, "Выберите, пожалуйста, что вас интересует\U0001F447", reply_markup=markup)
-
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
 
-    if message.text.strip() == 'Расписание':
+    if message.text.strip() == 'Запись в салон':
         send_schedule_keyboard(message.chat.id)
 
     elif message.text.strip() == 'Услуги':
@@ -165,6 +154,20 @@ def handle_text(message):
 
     conn.close()
 
+@bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
+def callback_choose_master(call):
+    master_name = call.data.split('_')[-1]
+    available_times = get_available_times(master_name)
+
+    if available_times:
+        markup = types.InlineKeyboardMarkup()
+        for time in available_times:
+            button = types.InlineKeyboardButton(text=time, callback_data=f"choose_time_{master_name}_{time}")
+            markup.add(button)
+        bot.send_message(call.message.chat.id, f"Выберите свободное время для мастера {master_name}:", reply_markup=markup)
+    else:
+        bot.send_message(call.message.chat.id, f"На выбранную дату все слоты мастра {master_name} заняты. Выберите другого мастера или дату.")
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_option_'))
 def callback_show_service(call):
     service_name = call.data.split('_')[-1].replace('_', ' ')  # Replace underscores with spaces
@@ -180,23 +183,40 @@ def callback_show_service(call):
     else:
         bot.send_message(call.message.chat.id, "Информация не найдена.")
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
-def callback_choose_master(call):
-    master_name = call.data.split('_')[-1]
-    available_times = get_available_times(master_name)
-
-    if available_times:
-        markup = types.InlineKeyboardMarkup()
-        for time in available_times:
-            button = types.InlineKeyboardButton(text=time, callback_data=f"choose_time_{master_name}_{time}")
-            markup.add(button)
-        bot.send_message(call.message.chat.id, f"Выберите свободное время для мастера {master_name}:", reply_markup=markup)
-    else:
-        bot.send_message(call.message.chat.id, f"На выбранную дату все слоты мастра {master_name} заняты. Выберите другого мастера или дату.")
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_time_'))
-def callback_choose_time(call):
-    master_name, time_slot = call.data.split('_')[2], call.data.split('_')[-1]
-    bot.send_message(call.message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
+def callback_enter_name(call):
+    bot.send_message(call.message.chat.id, "Для записи в салон ведите свое имя")
 
+    bot.register_next_step_handler(call.message, process_enter_phone, call.data)
+
+def process_enter_phone(message, data):
+    master_name, time_slot = data.split('_')[2], data.split('_')[-1]
+
+    customer_name = message.text
+
+    bot.send_message(message.chat.id, "Введите номер телефона")
+
+    bot.register_next_step_handler(message, process_generate_appointment, master_name, time_slot, customer_name)
+
+def process_generate_appointment(message, master_name, time_slot, customer_name):
+    customer_phone = message.text
+
+    connect = sqlite3.connect('database.db')
+    cursor = connect.cursor()
+    cursor.execute("""CREATE TABLE IF NOT EXISTS appointments(id INTEGER, master_name TEXT, time_slot TEXT, user_name TEXT, phone_number TEXT)""")
+    connect.commit()
+
+    user_id = message.chat.id
+    cursor.execute(f"SELECT id FROM appointments WHERE id = {user_id}")
+    data = cursor.fetchone()
+    values = [user_id, master_name, time_slot, customer_name, customer_phone]
+    cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
+    cursor.execute(f"DELETE FROM timetable WHERE Master = ? AND Time = ?", (master_name, time_slot))
+    connect.commit()
+    masters_schedule[master_name].remove(time_slot)
+    if not masters_schedule[master_name]:  # If the list is empty, remove the master from the dictionary
+        del masters_schedule[master_name]
+
+
+    bot.send_message(message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
 bot.polling(none_stop=True, interval=0)

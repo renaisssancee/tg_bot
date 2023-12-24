@@ -17,14 +17,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS masters
 connection.commit()
 connection.close()
 
-# Добавление информации о времени работы мастеров
-# masters_schedule = {
-#     'Анна': ['11:00', '12:00'],
-#     'Алина': ['13:00', '14:00'],
-#     'Полина': ['15:00', '16:00'],
-#     'Жанна': ['15:00', '16:00']
-# }
-
 # Функция для получения свободного времени мастера
 def get_available_times(master):
     connection = sqlite3.connect('database.db')

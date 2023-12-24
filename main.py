@@ -12,8 +12,6 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
               (Time TEXT, Master TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS info
               (Service, Info, Time, Price)''')
-cursor.execute('''CREATE TABLE IF NOT EXISTS masters
-              (Name TEXT)''')
 connection.commit()
 connection.close()
 
@@ -40,6 +38,7 @@ def add_timetable(time, master):
 
     connection.commit()
     connection.close()
+
 
 add_timetable('11:00', 'Анна')
 add_timetable('12:00', 'Анна')
@@ -123,24 +122,36 @@ def handle_text(message):
 
     elif message.text.strip() == 'Выбрать мастера':
         markup = types.InlineKeyboardMarkup()
-        cursor.execute('SELECT DISTINCT Name FROM masters')
+        cursor.execute('SELECT DISTINCT Master FROM timetable')
         masters = [row[0] for row in cursor.fetchall()]
         for master in masters:
             button = types.InlineKeyboardButton(text=master, callback_data=f"choose_master_{master}")
             markup.add(button)
         bot.send_message(message.chat.id, "Выберите мастера:", reply_markup=markup)
 
+
     elif message.text.strip() == 'Выбрать время':
-        bot.send_message(message.chat.id, "Сначала выберите мастера, затем - время. Используйте соответствующие кнопки.")
+        markup = types.InlineKeyboardMarkup()
+        cursor.execute('SELECT DISTINCT Master FROM timetable')
+        masters = [row[0] for row in cursor.fetchall()]
+        for master in masters:
+            available_times = get_available_times(master)
+            for time_slot in available_times:
+                button_text = f"{master}: {time_slot}"
+                callback_data = f"choose_time_{master}_{time_slot}"
+                button = types.InlineKeyboardButton(text=button_text, callback_data=callback_data)
+                markup.add(button)
+        bot.send_message(message.chat.id, "Выберите время:", reply_markup=markup)
+
+
 
     elif message.text.strip() == 'Назад':
         start(message)
     
     else:
-        bot.send_message(message.chat.id, 'Нажмите на одну из предложенных кнопок.')
+        bot.send_message(message.chat.id, 'нажмите кнопку')
 
     conn.close()
-
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
 def callback_choose_master(call):
@@ -171,9 +182,10 @@ def callback_show_service(call):
     else:
         bot.send_message(call.message.chat.id, "Информация не найдена.")
 
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_time_'))
 def callback_enter_name(call):
-    bot.send_message(call.message.chat.id, "Для записи в салон ведите свое имя")
+    bot.send_message(call.message.chat.id, "Для записи в салон введите свое имя")
 
     bot.register_next_step_handler(call.message, process_enter_phone, call.data)
 
@@ -189,24 +201,32 @@ def process_enter_phone(message, data):
 def process_generate_appointment(message, master_name, time_slot, customer_name):
     customer_phone = message.text
 
-    connect = sqlite3.connect('database.db')
-    cursor = connect.cursor()
+    connection = sqlite3.connect('database.db')
+    cursor = connection.cursor()
+
+    # Check if the selected time is still available
+    if time_slot not in get_available_times(master_name):
+        connection.close()
+        bot.send_message(message.chat.id, f"Извините, время {time_slot} уже занято. Выберите другое время.")
+        return
+
     cursor.execute("""CREATE TABLE IF NOT EXISTS appointments(id INTEGER, master_name TEXT, time_slot TEXT, user_name TEXT, phone_number TEXT)""")
-    connect.commit()
+    connection.commit()
 
     user_id = message.chat.id
-    cursor.execute(f"SELECT id FROM appointments WHERE id = ?", (user_id,))
+    cursor.execute(f"SELECT id FROM appointments WHERE id = {user_id}")
     data = cursor.fetchone()
+    values = [user_id, master_name, time_slot, customer_name, customer_phone]
+    cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
 
-    if not data:
-        values = [user_id, master_name, time_slot, customer_name, customer_phone]
-        cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
-        cursor.execute("DELETE FROM timetable WHERE Master = ? AND Time = ?", (master_name, time_slot))
-        connect.commit()
-        bot.send_message(message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
-    else:
-        bot.send_message(message.chat.id, "Вы уже записаны на другое время. Отмените текущую запись перед новой.")
-    
-    connect.close()
+    # Remove the booked slot from the timetable
+    cursor.execute("DELETE FROM timetable WHERE Master = ? AND Time = ?", (master_name, time_slot))
+
+    connection.commit()
+    connection.close()
+
+    bot.send_message(message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
+
+
 
 bot.polling(none_stop=True, interval=0)

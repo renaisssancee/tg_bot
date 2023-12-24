@@ -241,8 +241,7 @@ def handle_text(message):
         connection = sqlite3.connect('database.db')
         cursor = connection.cursor()
         user_id = message.chat.id
-        cursor.execute(f'SELECT master_name, time_slot, procedure FROM appointments WHERE id = {user_id}')
-
+        cursor.execute(f'SELECT time_slot, procedure, master_name FROM appointments WHERE id = {user_id}')
         appointments = cursor.fetchall()
 
         if len(appointments) == 0:
@@ -250,8 +249,13 @@ def handle_text(message):
         else:
             bot.send_message(message.chat.id, "Ваши предстоящие записи:")
             for i, appointment in enumerate(appointments):
-                master_name, time_slot, procedure = appointment
-                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Мастер: {master_name}, Услуга: {procedure}")
+                time_slot, procedure, master_name = appointment
+                inline_button = types.InlineKeyboardButton(
+                    text=f"Отменить: {time_slot}, {procedure}",
+                    callback_data=f"delete_appointment_{i + 1}"
+                )
+                markup = types.InlineKeyboardMarkup().add(inline_button)
+                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Услуга: {procedure}, Macтер: {master_name}", reply_markup=markup)
         connection.close()
 
     elif message.text.strip() == 'Я мастер':
@@ -289,6 +293,39 @@ def handle_text(message):
         bot.send_message(message.chat.id, 'нажмите кнопку')
 
     conn.close()
+
+def send_appointment_deleted_message(chat_id):
+    bot.send_message(chat_id, "Запись отменена")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('delete_appointment_'))
+def delete_appointment_callback(call):
+    appointment_index = int(call.data.split('_')[-1]) - 1
+    user_id = call.message.chat.id
+
+    connection = sqlite3.connect('database.db')
+    cursor = connection.cursor()
+    cursor.execute(f'SELECT time_slot, procedure, master_name FROM appointments WHERE id = {user_id}')
+    appointments = cursor.fetchall()
+
+    if 0 <= appointment_index < len(appointments):
+        time_slot, procedure, master_name = appointments[appointment_index]
+        cursor.execute("DELETE FROM appointments WHERE id = ? AND time_slot = ? AND procedure = ? AND master_name = ?", (user_id, time_slot, procedure, master_name))
+        cursor.execute("""
+        INSERT INTO timetable (DateTime, Master) 
+        SELECT ?, ?
+        WHERE NOT EXISTS (
+            SELECT 1 FROM timetable 
+            WHERE DateTime = ? AND Master = ?
+        )
+    """, (time_slot, master_name, time_slot, master_name))
+        connection.commit()
+        connection.close()
+
+        bot.answer_callback_query(call.id, text=f"Запись отменена: {time_slot}, {procedure}")
+        send_appointment_deleted_message(user_id)
+    else:
+        connection.close()
+        bot.answer_callback_query(call.id, text="Ошибка при отмене записи")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
@@ -356,7 +393,6 @@ def process_enter_procedure(message, master_name, time_slot, customer_name):
 
     bot.send_message(message.chat.id, "Выберите название процедуры", reply_markup=markup)
 
-    # Use lambda directly here instead of calling bot.register_next_step_handler
     bot.register_next_step_handler(message, lambda message: process_generate_appointment(message, master_name, time_slot, customer_name, customer_phone))
 
 def process_generate_appointment(message, master_name, time_slot, customer_name, customer_phone):

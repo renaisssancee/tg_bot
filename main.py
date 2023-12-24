@@ -12,16 +12,18 @@ cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
               (Time TEXT, Master TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS info
               (Service, Info, Time, Price)''')
+cursor.execute('''CREATE TABLE IF NOT EXISTS masters
+              (Name TEXT)''')
 connection.commit()
 connection.close()
 
 # Добавление информации о времени работы мастеров
-masters_schedule = {
-    'Анна': ['11:00', '12:00'],
-    'Алина': ['13:00', '14:00'],
-    'Полина': ['15:00', '16:00'],
-    'Жанна': ['15:00', '16:00']
-}
+# masters_schedule = {
+#     'Анна': ['11:00', '12:00'],
+#     'Алина': ['13:00', '14:00'],
+#     'Полина': ['15:00', '16:00'],
+#     'Жанна': ['15:00', '16:00']
+# }
 
 # Функция для получения свободного времени мастера
 def get_available_times(master):
@@ -129,30 +131,24 @@ def handle_text(message):
 
     elif message.text.strip() == 'Выбрать мастера':
         markup = types.InlineKeyboardMarkup()
-        for master in masters_schedule.keys():
+        cursor.execute('SELECT DISTINCT Name FROM masters')
+        masters = [row[0] for row in cursor.fetchall()]
+        for master in masters:
             button = types.InlineKeyboardButton(text=master, callback_data=f"choose_master_{master}")
             markup.add(button)
         bot.send_message(message.chat.id, "Выберите мастера:", reply_markup=markup)
 
-
     elif message.text.strip() == 'Выбрать время':
-        markup = types.InlineKeyboardMarkup()
-        for master, working_hours in masters_schedule.items():
-            for time_slot in working_hours:
-                button_text = f"{master}: {time_slot}"
-                callback_data = f"choose_time_{master}_{time_slot}"
-                button = types.InlineKeyboardButton(text=button_text, callback_data=callback_data)
-                markup.add(button)
-        bot.send_message(message.chat.id, "Выберите время:", reply_markup=markup)
-
+        bot.send_message(message.chat.id, "Сначала выберите мастера, затем - время. Используйте соответствующие кнопки.")
 
     elif message.text.strip() == 'Назад':
         start(message)
     
     else:
-        bot.send_message(message.chat.id, 'нажмите кнопку')
+        bot.send_message(message.chat.id, 'Нажмите на одну из предложенных кнопок.')
 
     conn.close()
+
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
 def callback_choose_master(call):
@@ -207,16 +203,18 @@ def process_generate_appointment(message, master_name, time_slot, customer_name)
     connect.commit()
 
     user_id = message.chat.id
-    cursor.execute(f"SELECT id FROM appointments WHERE id = {user_id}")
+    cursor.execute(f"SELECT id FROM appointments WHERE id = ?", (user_id,))
     data = cursor.fetchone()
-    values = [user_id, master_name, time_slot, customer_name, customer_phone]
-    cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
-    cursor.execute(f"DELETE FROM timetable WHERE Master = ? AND Time = ?", (master_name, time_slot))
-    connect.commit()
-    masters_schedule[master_name].remove(time_slot)
-    if not masters_schedule[master_name]:  # If the list is empty, remove the master from the dictionary
-        del masters_schedule[master_name]
 
+    if not data:
+        values = [user_id, master_name, time_slot, customer_name, customer_phone]
+        cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
+        cursor.execute("DELETE FROM timetable WHERE Master = ? AND Time = ?", (master_name, time_slot))
+        connect.commit()
+        bot.send_message(message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
+    else:
+        bot.send_message(message.chat.id, "Вы уже записаны на другое время. Отмените текущую запись перед новой.")
+    
+    connect.close()
 
-    bot.send_message(message.chat.id, f"Вы успешно записаны на {time_slot} к мастеру {master_name}")
 bot.polling(none_stop=True, interval=0)

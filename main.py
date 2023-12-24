@@ -7,9 +7,9 @@ bot = telebot.TeleBot('6574248387:AAGILlI3c29I8CqEQYT_xX-cVOTQaj15UM0')
 user_sessions = {}
 available_appointments = True
 
+# создаем базы данных
 connection = sqlite3.connect('database.db')
 cursor = connection.cursor()
-cursor.execute("DELETE FROM appointments;")
 cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
               (DateTime TEXT, Master TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS info
@@ -29,7 +29,7 @@ def get_available_times(master):
     connection.close()
     return [time for time in scheduled_times]
 
-
+# добавить доступное время для записи
 def add_timetable(date_time, master):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
@@ -74,6 +74,7 @@ def check_available_appointments():
     connection.close()
     return available_appointments
 
+# добавление услуг в базу данных с услугами
 def add_info(service, info, time, price):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
@@ -103,7 +104,7 @@ add_info('SPA-уход',
          'Входит очищение кожи с использованием скраба, интенсивное питание кожи маской-филлером, увлажнение кремом с пептидным комплексом',
          '30 минут', 'Стоимость - 700 рублей')
 
-
+# кнопочки
 def send_schedule_keyboard(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     item1 = types.KeyboardButton("Выбрать мастера")
@@ -112,7 +113,7 @@ def send_schedule_keyboard(chat_id):
     markup.add(item1, item2, item3)
     bot.send_message(chat_id, "Выберите опцию:", reply_markup=markup)
 
-
+# кнопочки с услугами
 def send_inline_keyboard(chat_id):
     markup = types.InlineKeyboardMarkup()
     services = ['Маникюр с покрытием', 'Наращивание', 'Маникюр без покрытия', 'Снятие покрытия', 'SPA-уход']
@@ -128,13 +129,14 @@ def send_only_back_keyboard(chat_id):
     markup.add(item1)
     bot.send_message(chat_id, "Вы можете добавить свой слот по следующей инструкции или выйти", reply_markup=markup)
 
+# возможность для мастера добавить окошко
 def add_slot(message):
     chat_id = message.chat.id
     send_only_back_keyboard(chat_id)
     data = {'date': None, 'time': None, 'master': None}
 
     def ask_for_date():
-        msg = bot.send_message(chat_id, 'Введите дату в формате DD.MM.YYYY:')
+        msg = bot.send_message(chat_id, 'Введите дату в формате DD.MM.YYYY')
         bot.register_next_step_handler(msg, process_date)
 
     def process_date(message):
@@ -145,7 +147,7 @@ def add_slot(message):
         ask_for_time()
 
     def ask_for_time():
-        msg = bot.send_message(chat_id, 'Введите время в формате HH:MM:')
+        msg = bot.send_message(chat_id, 'Введите время в формате HH:MM')
         bot.register_next_step_handler(msg, process_time)
 
     def process_time(message):
@@ -172,11 +174,13 @@ def add_slot(message):
 
     ask_for_date()
 
+# ввод пароля 
 def get_password(message):
     markup = types.InlineKeyboardMarkup()
     msg = bot.send_message(message.chat.id, 'Введите пароль: ', reply_markup=markup)
     bot.register_next_step_handler(msg, check_password)
 
+# проверка пароля для доступа к редактированию записей мастера
 def check_password(message):
     password = 1234
     try:
@@ -191,7 +195,7 @@ def check_password(message):
     except ValueError:
         bot.send_message(message.chat.id, 'Пароль состоит из цифр, перезайдите')
 
-
+# стартовая команда
 @bot.message_handler(commands=['start'])
 def start(message):
     connect = sqlite3.connect('database.db')
@@ -221,7 +225,7 @@ def start(message):
     connect.close()
 
 
-
+# вывод информации по выбранной кнопке
 @bot.message_handler(content_types=["text"])
 def handle_text(message):
     conn = sqlite3.connect('database.db')
@@ -237,7 +241,7 @@ def handle_text(message):
         connection = sqlite3.connect('database.db')
         cursor = connection.cursor()
         user_id = message.chat.id
-        cursor.execute(f'SELECT master_name, time_slot FROM appointments WHERE id = {user_id}')
+        cursor.execute(f'SELECT master_name, time_slot, procedure FROM appointments WHERE id = {user_id}')
 
         appointments = cursor.fetchall()
 
@@ -246,8 +250,8 @@ def handle_text(message):
         else:
             bot.send_message(message.chat.id, "Ваши предстоящие записи:")
             for i, appointment in enumerate(appointments):
-                master_name, time_slot = appointment
-                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Мастер: {master_name}")
+                master_name, time_slot, procedure = appointment
+                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Мастер: {master_name}, Услуга: {procedure}")
         connection.close()
 
     elif message.text.strip() == 'Я мастер':
@@ -333,7 +337,7 @@ def process_enter_phone(message, data):
 
     bot.send_message(message.chat.id, "Введите номер телефона")
 
-    bot.register_next_step_handler(message, process_enter_procedure, master_name, time_slot, customer_name)
+    bot.register_next_step_handler(message, lambda message: process_enter_procedure(message, master_name, time_slot, customer_name))
 
 def process_enter_procedure(message, master_name, time_slot, customer_name):
     customer_phone = message.text
@@ -352,7 +356,8 @@ def process_enter_procedure(message, master_name, time_slot, customer_name):
 
     bot.send_message(message.chat.id, "Выберите название процедуры", reply_markup=markup)
 
-    bot.register_next_step_handler(message, process_generate_appointment, master_name, time_slot, customer_name, customer_phone)
+    # Use lambda directly here instead of calling bot.register_next_step_handler
+    bot.register_next_step_handler(message, lambda message: process_generate_appointment(message, master_name, time_slot, customer_name, customer_phone))
 
 def process_generate_appointment(message, master_name, time_slot, customer_name, customer_phone):
     procedure = message.text
@@ -379,7 +384,18 @@ def process_generate_appointment(message, master_name, time_slot, customer_name,
     connection.commit()
     connection.close()
 
-    bot.send_message(message.chat.id, f"Вы успешно записаны на {procedure} на {time_slot} к мастеру {master_name}")
-    start(message)
+    success_message = f"Вы успешно записаны на {procedure} на {time_slot} к мастеру {master_name}"
+
+    success_message = f"Вы успешно записаны на {procedure} на {time_slot} к мастеру {master_name}"
+
+    return_to_main_markup = types.InlineKeyboardMarkup()
+    return_button = types.InlineKeyboardButton(text="Вернуться на главный экран", callback_data="return_to_main")
+    return_to_main_markup.add(return_button)
+
+    bot.send_message(message.chat.id, success_message, reply_markup=return_to_main_markup)
+
+@bot.callback_query_handler(func=lambda call: call.data == "return_to_main")
+def return_to_main_screen_callback(call):
+    start(call.message)
 
 bot.polling(none_stop=True, interval=0)

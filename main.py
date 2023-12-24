@@ -9,7 +9,7 @@ user_sessions = {}
 connection = sqlite3.connect('database.db')
 cursor = connection.cursor()
 cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
-              (Time TEXT, Master TEXT)''')
+              (DateTime TEXT, Master TEXT)''')
 cursor.execute('''CREATE TABLE IF NOT EXISTS info
               (Service, Info, Time, Price)''')
 connection.commit()
@@ -19,35 +19,35 @@ connection.close()
 def get_available_times(master):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
-    cursor.execute('SELECT Time FROM timetable WHERE Master = ?', (master,))
+    cursor.execute('SELECT DateTime FROM timetable WHERE Master = ?', (master,))
     scheduled_times = [row[0] for row in cursor.fetchall()]
     connection.close()
     return [time for time in scheduled_times]
 
-def add_timetable(time, master):
+def add_timetable(date_time, master):
     connection = sqlite3.connect('database.db')
     cursor = connection.cursor()
     cursor.execute("""
-        INSERT INTO timetable (Time, Master) 
+        INSERT INTO timetable (DateTime, Master) 
         SELECT ?, ?
         WHERE NOT EXISTS (
             SELECT 1 FROM timetable 
-            WHERE Time = ? AND Master = ?
+            WHERE DateTime = ? AND Master = ?
         )
-    """, (time, master, time, master))
+    """, (date_time, master, date_time, master))
 
     connection.commit()
     connection.close()
 
 
-add_timetable('11:00', 'Анна')
-add_timetable('12:00', 'Анна')
-add_timetable('13:00', 'Алина')
-add_timetable('14:00', 'Алина')
-add_timetable('15:00', 'Полина')
-add_timetable('16:00', 'Полина')
-add_timetable('15:00', 'Жанна')
-add_timetable('16:00', 'Жанна')
+add_timetable('25.12.2023 11:00', 'Анна')
+add_timetable('26.12.2023 12:00', 'Анна')
+add_timetable('27.12.2023 13:00', 'Алина')
+add_timetable('28.12.2023 14:00', 'Алина')
+add_timetable('29.12.2023 15:00', 'Полина')
+add_timetable('30.12.2023 16:00', 'Полина')
+add_timetable('03.01.2024 15:00', 'Жанна')
+add_timetable('04.01.2024 16:00', 'Жанна')
 
 def remove_old_timetable_entries():
     connection = sqlite3.connect('database.db')
@@ -205,9 +205,16 @@ def process_generate_appointment(message, master_name, time_slot, customer_name)
     cursor = connection.cursor()
 
     # Check if the selected time is still available
-    if time_slot not in get_available_times(master_name):
+    available_times = get_available_times(master_name)
+    if time_slot not in available_times:
         connection.close()
         bot.send_message(message.chat.id, f"Извините, время {time_slot} уже занято. Выберите другое время.")
+        return
+
+    # Check if the selected time is valid
+    if time_slot not in [str(time) for time in available_times]:
+        connection.close()
+        bot.send_message(message.chat.id, "Выбранное время недопустимо. Пожалуйста, выберите доступное время.")
         return
 
     cursor.execute("""CREATE TABLE IF NOT EXISTS appointments(id INTEGER, master_name TEXT, time_slot TEXT, user_name TEXT, phone_number TEXT)""")
@@ -220,7 +227,7 @@ def process_generate_appointment(message, master_name, time_slot, customer_name)
     cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?);", values)
 
     # Remove the booked slot from the timetable
-    cursor.execute("DELETE FROM timetable WHERE Master = ? AND Time = ?", (master_name, time_slot))
+    cursor.execute("DELETE FROM timetable WHERE Master = ? AND DateTime = ?", (master_name, time_slot))
 
     connection.commit()
     connection.close()

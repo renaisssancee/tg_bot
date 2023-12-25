@@ -12,102 +12,6 @@ user_sessions = {}
 available_appointments = True
 create_tables()
 
-# создаем базы данных
-# connection = sqlite3.connect('database.db')
-# cursor = connection.cursor()
-# cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
-#               (DateTime TEXT, Master TEXT)''')
-# cursor.execute('''CREATE TABLE IF NOT EXISTS info
-#               (Service, Info, Time, Price)''')
-# cursor.execute(
-#         """CREATE TABLE IF NOT EXISTS appointments
-#         (id INTEGER, master_name TEXT, time_slot TEXT, user_name TEXT, phone_number TEXT, procedure TEXT)""")
-# connection.commit()
-# connection.close()
-
-
-# def get_available_times(master):
-#     connection = sqlite3.connect('database.db')
-#     cursor = connection.cursor()
-#     cursor.execute('SELECT DateTime FROM timetable WHERE Master = ?', (master,))
-#     scheduled_times = [row[0] for row in cursor.fetchall()]
-#     connection.close()
-#     return [time for time in scheduled_times]
-
-# # добавить доступное время для записи
-# def add_timetable(date_time, master):
-#     connection = sqlite3.connect('database.db')
-#     cursor = connection.cursor()
-#     cursor.execute("""
-#         INSERT INTO timetable (DateTime, Master) 
-#         SELECT ?, ?
-#         WHERE NOT EXISTS (
-#             SELECT 1 FROM timetable 
-#             WHERE DateTime = ? AND Master = ?
-#         )
-#     """, (date_time, master, date_time, master))
-
-#     connection.commit()
-#     connection.close()
-
-
-# add_timetable('25.12.2023 11:00', 'Анна')
-# add_timetable('26.12.2023 12:00', 'Анна')
-# add_timetable('27.12.2023 13:00', 'Алина')
-# add_timetable('28.12.2023 14:00', 'Алина')
-# add_timetable('29.12.2023 15:00', 'Полина')
-# add_timetable('30.12.2023 16:00', 'Полина')
-# add_timetable('03.01.2024 15:00', 'Жанна')
-# add_timetable('04.01.2024 16:00', 'Жанна')
-
-
-# def remove_old_timetable_entries():
-#     connection = sqlite3.connect('database.db')
-#     cursor = connection.cursor()
-#     cursor.execute('DELETE FROM info')
-#     connection.commit()
-#     connection.close()
-
-# remove_old_timetable_entries()
-
-# def check_available_appointments():
-#     connection = sqlite3.connect('database.db')
-#     cursor = connection.cursor()
-#     cursor.execute('SELECT * FROM timetable')
-#     available_appointments = bool(cursor.fetchall())
-#     connection.close()
-#     return available_appointments
-
-# # добавление услуг в базу данных с услугами
-# def add_info(service, info, time, price):
-#     connection = sqlite3.connect('database.db')
-#     cursor = connection.cursor()
-#     cursor.execute("""
-#         INSERT INTO info (Service, Info, Time, Price) 
-#         SELECT ?, ?, ?, ?
-#         WHERE NOT EXISTS (
-#             SELECT 1 FROM info 
-#             WHERE Service = ? AND Info = ? AND Time = ? AND Price = ?
-#         )
-#     """, (service, info, time, price, service, info, time, price))
-#     connection.commit()
-#     connection.close()
-
-
-# add_info('Маникюр с покрытием',
-#          'Входит снятие старого покрытия, опил формы, комби маникюр, выравнивание, покрытие под кутикулу',
-#          'Продолжительность процедуры - 2 часа', 'Стоимость - 2500 рублей')
-# add_info('Наращивание',
-#          'Входит снятие старого покрытия, комби маникюр, создание архитектуры гелем, покрытие гель-лаком под кутикулу',
-#          'Продолжительность процедуры - 2,5 часа', 'Стоимость - 3500 рублей')
-# add_info('Маникюр без покрытия', 'Входит снятие старого покрытия, опил формы, комби маникюр',
-#          'Продолжительность процедуры - 1 час', 'Стоимость - 1000 рублей')
-# add_info('Снятие покрытия', 'Входит снятие старого покрытия, опил формы', 'Продолжительность процедуры - 15 минут',
-#          'Стоимость - 500 рублей')
-# add_info('SPA-уход',
-#          'Входит очищение кожи с использованием скраба, интенсивное питание кожи маской-филлером, увлажнение кремом с пептидным комплексом',
-#          '30 минут', 'Стоимость - 700 рублей')
-
 # кнопочки
 def send_schedule_keyboard(chat_id):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -312,7 +216,7 @@ def handle_text(message):
         connection = sqlite3.connect('database.db')
         cursor = connection.cursor()
         user_id = message.chat.id
-        cursor.execute(f'SELECT time_slot, procedure, master_name FROM appointments WHERE id = {user_id}')
+        cursor.execute(f'SELECT id, time_slot, procedure, master_name, status FROM appointments WHERE id = {user_id}')
         appointments = cursor.fetchall()
 
         if len(appointments) == 0:
@@ -320,13 +224,24 @@ def handle_text(message):
         else:
             bot.send_message(message.chat.id, "Ваши предстоящие записи:")
             for i, appointment in enumerate(appointments):
-                time_slot, procedure, master_name = appointment
-                inline_button = types.InlineKeyboardButton(
-                    text=f"Отменить: {time_slot}, {procedure}",
-                    callback_data=f"delete_appointment_{i + 1}"
-                )
-                markup = types.InlineKeyboardMarkup().add(inline_button)
-                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Услуга: {procedure}, Macтер: {master_name}", reply_markup=markup)
+                appointment_id, time_slot, procedure, master_name, status = appointment[0], appointment[1], appointment[2], appointment[3], appointment[4]
+                
+                if status == 'pending':
+                    inline_buttons = [
+                        types.InlineKeyboardButton(
+                            text=f"Отменить: {time_slot}, {procedure}",
+                            callback_data=f"delete_appointment_{i + 1}"
+                        ),
+                        types.InlineKeyboardButton(
+                            text="Подтвердить",
+                            callback_data=f"confirm_appointment_{i + 1}"
+                        )
+                    ]
+                else:
+                    inline_buttons = []  
+
+                markup = types.InlineKeyboardMarkup().add(*inline_buttons)
+                bot.send_message(message.chat.id, f"Дата и время: {time_slot}, Услуга: {procedure}, Мастер: {master_name}", reply_markup=markup)
         connection.close()
 
     elif message.text.strip() == 'Я мастер':
@@ -368,6 +283,9 @@ def handle_text(message):
 def send_appointment_deleted_message(chat_id):
     bot.send_message(chat_id, "Запись отменена")
 
+def send_appointment_confirmed_message(chat_id):
+    bot.send_message(chat_id, "Запись подтверждена")
+
 @bot.callback_query_handler(func=lambda call: call.data.startswith('delete_appointment_'))
 def delete_appointment_callback(call):
     appointment_index = int(call.data.split('_')[-1]) - 1
@@ -392,11 +310,35 @@ def delete_appointment_callback(call):
         connection.commit()
         connection.close()
 
-        bot.answer_callback_query(call.id, text=f"Запись отменена: {time_slot}, {procedure}")
         send_appointment_deleted_message(user_id)
     else:
         connection.close()
-        bot.answer_callback_query(call.id, text="Ошибка при отмене записи")
+        bot.send_message(call.id, text="Ошибка при отмене записи")
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('confirm_appointment_'))
+def confirm_appointment_callback(call):
+    appointment_index = int(call.data.split('_')[-1]) - 1
+    user_id = call.message.chat.id
+
+    connection = sqlite3.connect('database.db')
+    cursor = connection.cursor()
+    cursor.execute(f'SELECT id, time_slot, procedure, master_name, status FROM appointments WHERE id = {user_id}')
+    appointments = cursor.fetchall()
+
+    if 0 <= appointment_index < len(appointments):
+        appointment_id, time_slot, procedure, master_name, status = appointments[appointment_index]
+        if status == 'pending':
+            cursor.execute("UPDATE appointments SET status = 'confirmed' WHERE id = ? AND time_slot = ? AND procedure = ? AND master_name = ?", (user_id, time_slot, procedure, master_name))
+            connection.commit()
+            connection.close()
+
+            send_appointment_confirmed_message(call.message.chat.id)
+        else:
+            connection.close()
+            bot.send_message(call.message.chat.id, "Эта запись уже подтверждена.")
+    else:
+        connection.close()
+        bot.send_message(call.message.chat.id, "Ошибка при подтверждении записи")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('choose_master_'))
@@ -495,7 +437,7 @@ def process_generate_appointment(message, master_name, time_slot, customer_name,
 
     user_id = message.chat.id
     values = [user_id, master_name, time_slot, customer_name, customer_phone, procedure]
-    cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?, ?);", values)
+    cursor.execute("INSERT INTO appointments VALUES(?, ?, ?, ?, ?, ?, 'pending');", values)
 
     cursor.execute("DELETE FROM timetable WHERE Master = ? AND DateTime = ?", (master_name, time_slot))
 
@@ -509,6 +451,7 @@ def process_generate_appointment(message, master_name, time_slot, customer_name,
     return_to_main_markup.add(return_button)
 
     bot.send_message(message.chat.id, success_message, reply_markup=return_to_main_markup)
+
 
 @bot.callback_query_handler(func=lambda call: call.data == "return_to_main")
 def return_to_main_screen_callback(call):

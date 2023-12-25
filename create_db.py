@@ -11,11 +11,10 @@ def create_tables():
     # Создание таблицы информации
     cursor.execute('''CREATE TABLE IF NOT EXISTS info
                       (Service TEXT, Info TEXT, Time TEXT, Price TEXT)''')
-
+    
     # Создание таблицы записей
     cursor.execute('''CREATE TABLE IF NOT EXISTS appointments
-                      (id INTEGER, master_name TEXT, time_slot TEXT, user_name TEXT, phone_number TEXT, procedure TEXT)''')
+                      (id INTEGER, master_name TEXT, time_slot TEXT, user_name TEXT, phone_number TEXT, procedure TEXT, status TEXT DEFAULT 'pending')''')
 
     connection.commit()
     connection.close()
-

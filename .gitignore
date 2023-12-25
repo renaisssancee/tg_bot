@@ -20,8 +20,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Log files
-*.log
 
 # User-specific files
 *.sqlite3
